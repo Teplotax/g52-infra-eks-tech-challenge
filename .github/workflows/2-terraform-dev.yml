@@ -21,6 +21,7 @@ jobs:
     name: Terraform
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: dev
 
     defaults:
       run:
@@ -36,7 +37,7 @@ jobs:
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::403339561517:role/github-actions-terraform-dev
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-actions-terraform-dev
           aws-region: sa-east-1
 
       - name: Extract ECS name from tfvars
@@ -54,7 +55,7 @@ jobs:
       - name: Terraform Init
         run: |
           terraform init -reconfigure \
-            -backend-config="bucket=teplotax-terraform-state-dev" \
+            -backend-config="bucket=teplotax-terraform-state-dev-${{ vars.AWS_ACCOUNT_ID }}" \
             -backend-config="key=dev/${{ steps.ecs.outputs.ECS_NAME }}/terraform.tfstate" \
             -backend-config="region=sa-east-1"
 
