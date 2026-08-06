@@ -40,11 +40,11 @@ jobs:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-actions-terraform-dev
           aws-region: sa-east-1
 
-      - name: Extract ECS name from tfvars
-        id: ecs
+      - name: Extract cluster name from tfvars
+        id: cluster
         run: |
-          ECS_NAME=$(grep -E '^ecs_name\s*=' inventories/dev/terraform.tfvars | awk -F '=' '{gsub(/[" ]/, "", $2); print $2}')
-          echo "ECS_NAME=$ECS_NAME" >> $GITHUB_OUTPUT
+          CLUSTER_NAME=$(grep -E '^cluster_name\s*=' inventories/dev/terraform.tfvars | awk -F '=' '{gsub(/[" ]/, "", $2); print $2}')
+          echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_OUTPUT
 
       - name: Read destroy flag from tfvars
         id: flags
@@ -56,7 +56,7 @@ jobs:
         run: |
           terraform init -reconfigure \
             -backend-config="bucket=teplotax-terraform-state-dev-${{ vars.AWS_ACCOUNT_ID }}" \
-            -backend-config="key=dev/${{ steps.ecs.outputs.ECS_NAME }}/terraform.tfstate" \
+            -backend-config="key=dev/${{ steps.cluster.outputs.CLUSTER_NAME }}/terraform.tfstate" \
             -backend-config="region=sa-east-1"
 
       - name: Debug destroy flag
@@ -136,7 +136,7 @@ jobs:
 
           echo "branch_name=$BRANCH" >> "$GITHUB_OUTPUT"
 
-      - name: Create PR (develop → release)
+      - name: Create PR (develop -> release)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
