@@ -1,3 +1,49 @@
+data "aws_subnet" "public" {
+  for_each = toset(var.public_subnet_ids)
+  id       = each.value
+}
+
+resource "aws_subnet" "private" {
+  count             = length(var.private_subnet_cidrs)
+  vpc_id            = var.vpc_id
+  cidr_block        = var.private_subnet_cidrs[count.index]
+  availability_zone = data.aws_subnet.public[var.public_subnet_ids[count.index]].availability_zone
+
+  tags = merge(local.common_tags, {
+    Name = "${var.cluster_name}-private-${count.index}"
+  })
+}
+
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags   = local.common_tags
+}
+
+resource "aws_nat_gateway" "this" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = var.public_subnet_ids[0]
+  tags          = local.common_tags
+
+  depends_on = [aws_eip.nat]
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = var.vpc_id
+  tags   = merge(local.common_tags, { Name = "${var.cluster_name}-private-rt" })
+}
+
+resource "aws_route" "private_nat" {
+  route_table_id         = aws_route_table.private.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.this.id
+}
+
+resource "aws_route_table_association" "private" {
+  count          = length(aws_subnet.private)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private.id
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0"
@@ -6,7 +52,7 @@ module "eks" {
   kubernetes_version = var.kubernetes_version
 
   vpc_id     = var.vpc_id
-  subnet_ids = var.subnet_ids
+  subnet_ids = aws_subnet.private[*].id
 
   endpoint_public_access = true
 
@@ -75,18 +121,25 @@ resource "aws_ecr_repository" "keycloak" {
   }
 }
 
-resource "aws_ec2_tag" "cluster_shared" {
-  for_each    = toset(var.subnet_ids)
+resource "aws_ec2_tag" "public_cluster_shared" {
+  for_each    = toset(var.public_subnet_ids)
   resource_id = each.value
   key         = "kubernetes.io/cluster/${var.cluster_name}"
   value       = "shared"
 }
 
-resource "aws_ec2_tag" "elb_role" {
-  for_each    = toset(var.subnet_ids)
+resource "aws_ec2_tag" "public_elb_role" {
+  for_each    = toset(var.public_subnet_ids)
   resource_id = each.value
   key         = "kubernetes.io/role/elb"
   value       = "1"
+}
+
+resource "aws_ec2_tag" "private_cluster_shared" {
+  for_each    = { for idx, s in aws_subnet.private : tostring(idx) => s.id }
+  resource_id = each.value
+  key         = "kubernetes.io/cluster/${var.cluster_name}"
+  value       = "shared"
 }
 
 data "aws_iam_policy_document" "lb_controller_assume_role" {

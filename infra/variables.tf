@@ -4,7 +4,7 @@ variable "cluster_name" {
 
 variable "kubernetes_version" {
   type    = string
-  default = "1.31"
+  default = "1.34"
 }
 
 variable "aws_region" {
@@ -20,7 +20,11 @@ variable "vpc_id" {
   type = string
 }
 
-variable "subnet_ids" {
+variable "public_subnet_ids" {
+  type = list(string)
+}
+
+variable "private_subnet_cidrs" {
   type = list(string)
 }
 
