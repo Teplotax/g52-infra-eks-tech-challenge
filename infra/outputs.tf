@@ -1,9 +1,21 @@
-output "cluster_id" {
-  value = aws_ecs_cluster.main.id
+output "cluster_name" {
+  value = module.eks.cluster_name
 }
 
-output "cluster_name" {
-  value = aws_ecs_cluster.main.name
+output "cluster_endpoint" {
+  value = module.eks.cluster_endpoint
+}
+
+output "cluster_certificate_authority_data" {
+  value = module.eks.cluster_certificate_authority_data
+}
+
+output "oidc_provider_arn" {
+  value = module.eks.oidc_provider_arn
+}
+
+output "lb_controller_role_arn" {
+  value = aws_iam_role.lb_controller.arn
 }
 
 output "app_repository_url" {
