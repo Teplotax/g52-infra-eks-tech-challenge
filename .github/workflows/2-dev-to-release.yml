@@ -63,7 +63,7 @@ jobs:
           terraform init -reconfigure \
             -backend-config="bucket=g52-terraform-state-dev-${{ vars.AWS_ACCOUNT_ID }}" \
             -backend-config="key=dev/${{ steps.cluster.outputs.CLUSTER_NAME }}/terraform.tfstate" \
-            -backend-config="region=sa-east-1"
+            -backend-config="region=us-east-1"
 
       - name: Debug destroy flag
         run: echo "DESTROY=${{ steps.flags.outputs.DESTROY }}"
