@@ -1,47 +1,12 @@
-data "aws_subnet" "public" {
-  for_each = toset(var.public_subnet_ids)
-  id       = each.value
+data "aws_vpc" "default" {
+  default = true
 }
 
-resource "aws_subnet" "private" {
-  count             = length(var.private_subnet_cidrs)
-  vpc_id            = var.vpc_id
-  cidr_block        = var.private_subnet_cidrs[count.index]
-  availability_zone = data.aws_subnet.public[var.public_subnet_ids[count.index]].availability_zone
-
-  tags = merge(local.common_tags, {
-    Name = "${var.cluster_name}-private-${count.index}"
-  })
-}
-
-resource "aws_eip" "nat" {
-  domain = "vpc"
-  tags   = local.common_tags
-}
-
-resource "aws_nat_gateway" "this" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = var.public_subnet_ids[0]
-  tags          = local.common_tags
-
-  depends_on = [aws_eip.nat]
-}
-
-resource "aws_route_table" "private" {
-  vpc_id = var.vpc_id
-  tags   = merge(local.common_tags, { Name = "${var.cluster_name}-private-rt" })
-}
-
-resource "aws_route" "private_nat" {
-  route_table_id         = aws_route_table.private.id
-  destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.this.id
-}
-
-resource "aws_route_table_association" "private" {
-  count          = length(aws_subnet.private)
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
 }
 
 module "eks" {
@@ -51,35 +16,26 @@ module "eks" {
   name               = var.cluster_name
   kubernetes_version = var.kubernetes_version
 
-  vpc_id     = var.vpc_id
-  subnet_ids = aws_subnet.private[*].id
+  vpc_id     = data.aws_vpc.default.id
+  subnet_ids = data.aws_subnets.default.ids
 
   endpoint_public_access = true
 
   enable_cluster_creator_admin_permissions = true
   authentication_mode                      = "API_AND_CONFIG_MAP"
 
-  fargate_profiles = {
-    kube_system = {
-      name = "kube-system"
-      selectors = [
-        { namespace = "kube-system" }
-      ]
-    }
-    app = {
-      name = var.app_namespace
-      selectors = [
-        { namespace = var.app_namespace }
-      ]
+  eks_managed_node_groups = {
+    default = {
+      ami_type       = "AL2023_x86_64_STANDARD"
+      instance_types = ["t3.small"]
+      min_size       = 1
+      max_size       = 1
+      desired_size   = 1
     }
   }
 
   addons = {
-    coredns = {
-      configuration_values = jsonencode({
-        computeType = "Fargate"
-      })
-    }
+    coredns = {}
     kube-proxy = {}
     vpc-cni = {
       before_compute = true
@@ -121,36 +77,19 @@ resource "aws_ecr_repository" "keycloak" {
   }
 }
 
-resource "aws_ec2_tag" "public_cluster_shared" {
-  for_each    = toset(var.public_subnet_ids)
+resource "aws_ec2_tag" "cluster_shared" {
+  for_each    = toset(data.aws_subnets.default.ids)
   resource_id = each.value
   key         = "kubernetes.io/cluster/${var.cluster_name}"
   value       = "shared"
 }
 
-resource "aws_ec2_tag" "public_elb_role" {
-  for_each    = toset(var.public_subnet_ids)
+resource "aws_ec2_tag" "elb_role" {
+  for_each    = toset(data.aws_subnets.default.ids)
   resource_id = each.value
   key         = "kubernetes.io/role/elb"
   value       = "1"
 }
-
-resource "aws_ec2_tag" "private_cluster_shared" {
-  for_each    = { for idx, s in aws_subnet.private : tostring(idx) => s.id }
-  resource_id = each.value
-  key         = "kubernetes.io/cluster/${var.cluster_name}"
-  value       = "shared"
-}
-
-# moved {
-#   from = aws_ec2_tag.cluster_shared
-#   to   = aws_ec2_tag.public_cluster_shared
-# }
-#
-# moved {
-#   from = aws_ec2_tag.elb_role
-#   to   = aws_ec2_tag.public_elb_role
-# }
 
 data "aws_iam_policy_document" "lb_controller_assume_role" {
   statement {
@@ -202,7 +141,7 @@ resource "helm_release" "aws_load_balancer_controller" {
     yamlencode({
       clusterName = module.eks.cluster_name
       region      = var.aws_region
-      vpcId       = var.vpc_id
+      vpcId       = data.aws_vpc.default.id
       serviceAccount = {
         create = true
         name   = "aws-load-balancer-controller"

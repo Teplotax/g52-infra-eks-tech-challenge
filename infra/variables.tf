@@ -9,23 +9,11 @@ variable "kubernetes_version" {
 
 variable "aws_region" {
   type    = string
-  default = "sa-east-1"
+  default = "us-east-1"
 }
 
 variable "environment" {
   type = string
-}
-
-variable "vpc_id" {
-  type = string
-}
-
-variable "public_subnet_ids" {
-  type = list(string)
-}
-
-variable "private_subnet_cidrs" {
-  type = list(string)
 }
 
 variable "app_namespace" {
