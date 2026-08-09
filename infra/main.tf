@@ -142,6 +142,16 @@ resource "aws_ec2_tag" "private_cluster_shared" {
   value       = "shared"
 }
 
+# moved {
+#   from = aws_ec2_tag.cluster_shared
+#   to   = aws_ec2_tag.public_cluster_shared
+# }
+#
+# moved {
+#   from = aws_ec2_tag.elb_role
+#   to   = aws_ec2_tag.public_elb_role
+# }
+
 data "aws_iam_policy_document" "lb_controller_assume_role" {
   statement {
     effect  = "Allow"
