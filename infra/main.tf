@@ -150,6 +150,7 @@ resource "helm_release" "aws_load_balancer_controller" {
       clusterName = module.eks.cluster_name
       region      = var.aws_region
       vpcId       = local.vpc_id
+      replicaCount = 1
       serviceAccount = {
         create = true
         name   = "aws-load-balancer-controller"
