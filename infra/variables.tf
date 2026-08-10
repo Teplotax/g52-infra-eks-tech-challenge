@@ -4,7 +4,7 @@ variable "cluster_name" {
 
 variable "kubernetes_version" {
   type    = string
-  default = "1.35"
+  default = "1.34"
 }
 
 variable "aws_region" {
@@ -23,6 +23,10 @@ variable "app_namespace" {
 
 variable "subnet_ids" {
   type = list(string)
+}
+
+variable "console_user_arn" {
+  type = string
 }
 
 variable "destroy" {
