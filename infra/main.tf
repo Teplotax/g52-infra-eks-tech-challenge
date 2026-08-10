@@ -3,6 +3,26 @@ data "aws_subnet" "selected" {
   id       = each.value
 }
 
+data "aws_caller_identity" "current" {}
+
+data "aws_iam_policy_document" "console_admin_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+  }
+}
+
+resource "aws_iam_role" "console_admin" {
+  name               = "${var.cluster_name}-console-admin"
+  assume_role_policy = data.aws_iam_policy_document.console_admin_assume_role.json
+  tags               = local.cluster_tags
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0"
@@ -17,6 +37,20 @@ module "eks" {
 
   enable_cluster_creator_admin_permissions = true
   authentication_mode                      = "API_AND_CONFIG_MAP"
+
+  access_entries = {
+    console_admin = {
+      principal_arn = aws_iam_role.console_admin.arn
+      policy_associations = {
+        admin = {
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = {
+            type = "cluster"
+          }
+        }
+      }
+    }
+  }
 
   eks_managed_node_groups = {
     default = {
