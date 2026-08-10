@@ -15,6 +15,8 @@ module "eks" {
 
   endpoint_public_access = true
 
+  cloudwatch_log_group_retention_in_days = 1
+
   enable_cluster_creator_admin_permissions = true
   authentication_mode                      = "API_AND_CONFIG_MAP"
 
