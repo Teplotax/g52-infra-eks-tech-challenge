@@ -21,6 +21,10 @@ variable "app_namespace" {
   default = "tech-challenge"
 }
 
+variable "subnet_ids" {
+  type = list(string)
+}
+
 variable "destroy" {
   type    = bool
   default = false

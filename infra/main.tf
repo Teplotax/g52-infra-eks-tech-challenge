@@ -1,12 +1,6 @@
-data "aws_vpc" "default" {
-  default = true
-}
-
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
+data "aws_subnet" "selected" {
+  for_each = toset(var.subnet_ids)
+  id       = each.value
 }
 
 module "eks" {
@@ -16,8 +10,8 @@ module "eks" {
   name               = var.cluster_name
   kubernetes_version = var.kubernetes_version
 
-  vpc_id     = data.aws_vpc.default.id
-  subnet_ids = data.aws_subnets.default.ids
+  vpc_id     = local.vpc_id
+  subnet_ids = var.subnet_ids
 
   endpoint_public_access = true
 
@@ -78,14 +72,14 @@ resource "aws_ecr_repository" "keycloak" {
 }
 
 resource "aws_ec2_tag" "cluster_shared" {
-  for_each    = toset(data.aws_subnets.default.ids)
+  for_each    = toset(var.subnet_ids)
   resource_id = each.value
   key         = "kubernetes.io/cluster/${var.cluster_name}"
   value       = "shared"
 }
 
 resource "aws_ec2_tag" "elb_role" {
-  for_each    = toset(data.aws_subnets.default.ids)
+  for_each    = toset(var.subnet_ids)
   resource_id = each.value
   key         = "kubernetes.io/role/elb"
   value       = "1"
@@ -141,7 +135,7 @@ resource "helm_release" "aws_load_balancer_controller" {
     yamlencode({
       clusterName = module.eks.cluster_name
       region      = var.aws_region
-      vpcId       = data.aws_vpc.default.id
+      vpcId       = local.vpc_id
       serviceAccount = {
         create = true
         name   = "aws-load-balancer-controller"

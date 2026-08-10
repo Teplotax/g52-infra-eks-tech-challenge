@@ -14,4 +14,6 @@ locals {
     resource = "eks-cluster"
     service  = var.cluster_name
   })
+
+  vpc_id = data.aws_subnet.selected[var.subnet_ids[0]].vpc_id
 }
