@@ -15,6 +15,8 @@ module "eks" {
 
   endpoint_public_access = true
 
+  cloudwatch_log_group_retention_in_days = 1
+
   enable_cluster_creator_admin_permissions = true
   authentication_mode                      = "API_AND_CONFIG_MAP"
 
@@ -150,6 +152,7 @@ resource "helm_release" "aws_load_balancer_controller" {
       clusterName = module.eks.cluster_name
       region      = var.aws_region
       vpcId       = local.vpc_id
+      replicaCount = 1
       serviceAccount = {
         create = true
         name   = "aws-load-balancer-controller"
