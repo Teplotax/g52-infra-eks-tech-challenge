@@ -26,7 +26,7 @@ variable "subnet_ids" {
 }
 
 variable "console_user_arn" {
-  type = string
+  type = list(string)
 }
 
 variable "destroy" {
