@@ -15,14 +15,12 @@ module "eks" {
 
   endpoint_public_access = true
 
-  cloudwatch_log_group_retention_in_days = 1
-
   enable_cluster_creator_admin_permissions = true
   authentication_mode                      = "API_AND_CONFIG_MAP"
 
   access_entries = {
-    for arn in var.console_user_arn : replace(split("/", arn)[1], ".", "-") => {
-      principal_arn = arn
+    console_user = {
+      principal_arn = var.console_user_arn
       policy_associations = {
         admin = {
           policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
@@ -67,6 +65,7 @@ resource "aws_ecr_repository" "app" {
   }
 
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   lifecycle {
     prevent_destroy = false
@@ -81,6 +80,7 @@ resource "aws_ecr_repository" "keycloak" {
   }
 
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   lifecycle {
     prevent_destroy = false
