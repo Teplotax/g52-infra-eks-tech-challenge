@@ -19,8 +19,8 @@ module "eks" {
   authentication_mode                      = "API_AND_CONFIG_MAP"
 
   access_entries = {
-    console_user = {
-      principal_arn = var.console_user_arn
+    for arn in var.console_user_arn : replace(split("/", arn)[1], ".", "-") => {
+      principal_arn = arn
       policy_associations = {
         admin = {
           policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
