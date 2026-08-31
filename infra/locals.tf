@@ -10,8 +10,10 @@ locals {
     project     = local.project
   }
 
-  ecs_tags = {
-    resource = "ecs-cluster"
-    service  = var.ecs_name
-  }
+  cluster_tags = merge(local.common_tags, {
+    resource = "eks-cluster"
+    service  = var.cluster_name
+  })
+
+  vpc_id = data.aws_subnet.selected[var.subnet_ids[0]].vpc_id
 }
