@@ -13,6 +13,8 @@ Infraestrutura Terraform para provisionamento de um **EKS Cluster (Fargate)** na
 | `helm_release` (aws-load-balancer-controller) | Controller que provisiona a NLB a partir de manifestos Kubernetes |
 | `helm_release` (metrics-server) | Necessário para o HPA calcular utilização de CPU/memória |
 | `aws_ec2_tag` | Tags de descoberta de subnet (`kubernetes.io/cluster/*`, `kubernetes.io/role/elb`) usadas pelo Load Balancer Controller |
+| `aws_iam_role` (ebs_csi) + `aws_eks_addon` (aws-ebs-csi-driver) | Role IRSA e addon gerenciado do EBS CSI Driver, necessário para `PersistentVolumeClaim` (ex: o pod do Postgres em `/k8s`) |
+| `kubernetes_storage_class` (gp3) | StorageClass `gp3` marcada como default do cluster, usada pelo `PersistentVolumeClaim` do Postgres |
 
 ## Estrutura
 
@@ -59,6 +61,7 @@ infra/
 | `cluster_certificate_authority_data` | CA do cluster (base64) |
 | `oidc_provider_arn` | ARN do provider OIDC do cluster, usado para IRSA |
 | `lb_controller_role_arn` | ARN da IAM role usada pelo AWS Load Balancer Controller |
+| `ebs_csi_role_arn` | ARN da IAM role usada pelo EBS CSI Driver |
 | `app_repository_url` | URL do repositório ECR da aplicação |
 | `keycloak_repository_url` | URL do repositório ECR do Keycloak |
 
@@ -77,6 +80,10 @@ feature/** -> develop -> release/vX.X.X -> main
 | `4-release-to-main.yml` | PR fechado em `release/**` | Abre PR automático da release para `main` |
 
 A autenticação com a AWS é feita via **OIDC** (sem chaves estáticas). O role `github-actions-terraform-dev` precisa aceitar tanto o formato clássico quanto o formato imutável do `sub` claim (`repo:Teplotax@<owner_id>/*:*`), já que repositórios criados após 15/07/2026 usam o novo formato por padrão.
+
+## Volumes persistentes (EBS)
+
+O Postgres em `/k8s` (repositório `g52-app-tech-challenge`) usa um `PersistentVolumeClaim` na StorageClass `gp3` provisionada aqui. Cada PVC cria um volume EBS real na AWS via EBS CSI Driver — esse volume **não é gerenciado pelo Terraform** (é criado dinamicamente pelo Kubernetes) e por isso **não é removido automaticamente por um `terraform destroy`**. Antes de rodar o pipeline com `destroy = true`, delete o PVC do Postgres (`kubectl delete pvc -n tech-challenge postgres-pvc`) para o CSI driver apagar o volume; caso contrário ele fica órfão na conta AWS gerando custo.
 
 ## Migração de ECS para EKS
 
