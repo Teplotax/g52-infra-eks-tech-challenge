@@ -35,28 +35,12 @@ module "eks" {
   eks_managed_node_groups = {
     default = {
       ami_type       = "AL2023_x86_64_STANDARD"
-      instance_types = ["t3.micro"]
-      # t3.micro: ~1 GiB RAM, ~350Mi free per node after kubelet reserve + daemonsets.
-      # 6 nodes fit system pods + app/keycloak/postgres/mailpit; max 7 leaves room for the HPA's 2nd app replica.
-      min_size     = 6
-      max_size     = 7
-      desired_size = 6
-
-      # Default ENI limit on t3.micro is 4 pods/node (3 are daemonsets); prefix delegation lifts it.
-      cloudinit_pre_nodeadm = [
-        {
-          content_type = "application/node.eks.aws"
-          content      = <<-EOT
-            ---
-            apiVersion: node.eks.aws/v1alpha1
-            kind: NodeConfig
-            spec:
-              kubelet:
-                config:
-                  maxPods: 10
-          EOT
-        }
-      ]
+      instance_types = ["t3.small"]
+      # t3.small: 2 GiB RAM, ~1.3Gi free per node after kubelet reserve + daemonsets, 11 pods/node.
+      # 2 nodes fit system pods + app/keycloak/postgres/mailpit (incl. the HPA's 2nd app replica).
+      min_size     = 2
+      max_size     = 3
+      desired_size = 2
     }
   }
 
@@ -65,12 +49,6 @@ module "eks" {
     kube-proxy = {}
     vpc-cni = {
       before_compute = true
-      configuration_values = jsonencode({
-        env = {
-          ENABLE_PREFIX_DELEGATION = "true"
-          WARM_PREFIX_TARGET       = "1"
-        }
-      })
     }
   }
 
