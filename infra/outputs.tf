@@ -29,3 +29,7 @@ output "app_repository_url" {
 output "keycloak_repository_url" {
   value = aws_ecr_repository.keycloak.repository_url
 }
+
+output "cluster_autoscaler_role_arn" {
+  value = aws_iam_role.cluster_autoscaler.arn
+}
