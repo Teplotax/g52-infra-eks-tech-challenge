@@ -35,10 +35,28 @@ module "eks" {
   eks_managed_node_groups = {
     default = {
       ami_type       = "AL2023_x86_64_STANDARD"
-      instance_types = ["t3.medium"]
-      min_size       = 1
-      max_size       = 1
-      desired_size   = 1
+      instance_types = ["t3.micro"]
+      # t3.micro: ~1 GiB RAM, ~350Mi free per node after kubelet reserve + daemonsets.
+      # 6 nodes fit system pods + app/keycloak/postgres/mailpit; max 7 leaves room for the HPA's 2nd app replica.
+      min_size     = 6
+      max_size     = 7
+      desired_size = 6
+
+      # Default ENI limit on t3.micro is 4 pods/node (3 are daemonsets); prefix delegation lifts it.
+      cloudinit_pre_nodeadm = [
+        {
+          content_type = "application/node.eks.aws"
+          content      = <<-EOT
+            ---
+            apiVersion: node.eks.aws/v1alpha1
+            kind: NodeConfig
+            spec:
+              kubelet:
+                config:
+                  maxPods: 10
+          EOT
+        }
+      ]
     }
   }
 
@@ -47,6 +65,12 @@ module "eks" {
     kube-proxy = {}
     vpc-cni = {
       before_compute = true
+      configuration_values = jsonencode({
+        env = {
+          ENABLE_PREFIX_DELEGATION = "true"
+          WARM_PREFIX_TARGET       = "1"
+        }
+      })
     }
   }
 
@@ -96,6 +120,13 @@ resource "aws_eks_addon" "ebs_csi_driver" {
   cluster_name             = module.eks.cluster_name
   addon_name               = "aws-ebs-csi-driver"
   service_account_role_arn = aws_iam_role.ebs_csi.arn
+
+  # Single controller replica: each one requests ~240Mi, a big chunk of a t3.micro.
+  configuration_values = jsonencode({
+    controller = {
+      replicaCount = 1
+    }
+  })
 
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
