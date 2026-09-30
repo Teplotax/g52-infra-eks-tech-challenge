@@ -18,10 +18,18 @@ output "lb_controller_role_arn" {
   value = aws_iam_role.lb_controller.arn
 }
 
+output "ebs_csi_role_arn" {
+  value = aws_iam_role.ebs_csi.arn
+}
+
 output "app_repository_url" {
   value = aws_ecr_repository.app.repository_url
 }
 
 output "keycloak_repository_url" {
   value = aws_ecr_repository.keycloak.repository_url
+}
+
+output "cluster_autoscaler_role_arn" {
+  value = aws_iam_role.cluster_autoscaler.arn
 }

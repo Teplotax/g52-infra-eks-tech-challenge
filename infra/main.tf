@@ -35,10 +35,12 @@ module "eks" {
   eks_managed_node_groups = {
     default = {
       ami_type       = "AL2023_x86_64_STANDARD"
-      instance_types = ["t3.medium"]
-      min_size       = 1
-      max_size       = 1
-      desired_size   = 1
+      instance_types = ["t3.small"]
+      # t3.small: 2 GiB RAM, ~1.3Gi free per node after kubelet reserve + daemonsets, 11 pods/node.
+      # 2 nodes fit system pods + app/keycloak/postgres/mailpit (incl. the HPA's 2nd app replica).
+      min_size     = 2
+      max_size     = 3
+      desired_size = 2
     }
   }
 
@@ -55,6 +57,79 @@ module "eks" {
 
 data "aws_eks_cluster_auth" "this" {
   name = module.eks.cluster_name
+}
+
+data "aws_iam_policy_document" "ebs_csi_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [module.eks.oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${module.eks.oidc_provider}:sub"
+      values   = ["system:serviceaccount:kube-system:ebs-csi-controller-sa"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${module.eks.oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ebs_csi" {
+  name               = "${var.cluster_name}-ebs-csi-driver"
+  assume_role_policy = data.aws_iam_policy_document.ebs_csi_assume_role.json
+  tags               = local.cluster_tags
+}
+
+resource "aws_iam_role_policy_attachment" "ebs_csi" {
+  role       = aws_iam_role.ebs_csi.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+}
+
+resource "aws_eks_addon" "ebs_csi_driver" {
+  cluster_name             = module.eks.cluster_name
+  addon_name               = "aws-ebs-csi-driver"
+  service_account_role_arn = aws_iam_role.ebs_csi.arn
+
+  # Single controller replica: each one requests ~240Mi, a big chunk of a t3.micro.
+  configuration_values = jsonencode({
+    controller = {
+      replicaCount = 1
+    }
+  })
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  depends_on = [module.eks, aws_iam_role_policy_attachment.ebs_csi]
+}
+
+resource "kubernetes_storage_class" "gp3" {
+  metadata {
+    name = "gp3"
+    annotations = {
+      "storageclass.kubernetes.io/is-default-class" = "true"
+    }
+  }
+
+  storage_provisioner    = "ebs.csi.aws.com"
+  reclaim_policy         = "Delete"
+  volume_binding_mode    = "WaitForFirstConsumer"
+  allow_volume_expansion = true
+
+  parameters = {
+    type = "gp3"
+  }
+
+  depends_on = [aws_eks_addon.ebs_csi_driver]
 }
 
 resource "aws_ecr_repository" "app" {
@@ -179,4 +254,125 @@ resource "helm_release" "metrics_server" {
   ]
 
   depends_on = [module.eks]
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [module.eks.oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${module.eks.oidc_provider}:sub"
+      values   = ["system:serviceaccount:kube-system:cluster-autoscaler"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${module.eks.oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler" {
+  statement {
+    effect  = "Allow"
+    actions = [
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeScalingActivities",
+      "autoscaling:DescribeTags",
+      "ec2:DescribeImages",
+      "ec2:DescribeInstanceTypes",
+      "ec2:DescribeLaunchTemplateVersions",
+      "ec2:GetInstanceTypesFromInstanceRequirements",
+      "eks:DescribeNodegroup",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    effect  = "Allow"
+    actions = [
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/k8s.io/cluster-autoscaler/${var.cluster_name}"
+      values   = ["owned"]
+    }
+  }
+}
+
+resource "aws_iam_role" "cluster_autoscaler" {
+  name               = "${var.cluster_name}-cluster-autoscaler"
+  assume_role_policy = data.aws_iam_policy_document.cluster_autoscaler_assume_role.json
+  tags               = local.cluster_tags
+}
+
+resource "aws_iam_policy" "cluster_autoscaler" {
+  name   = "${var.cluster_name}-ClusterAutoscalerPolicy"
+  policy = data.aws_iam_policy_document.cluster_autoscaler.json
+}
+
+resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
+  role       = aws_iam_role.cluster_autoscaler.name
+  policy_arn = aws_iam_policy.cluster_autoscaler.arn
+}
+
+resource "helm_release" "cluster_autoscaler" {
+  name       = "cluster-autoscaler"
+  repository = "https://kubernetes.github.io/autoscaler"
+  chart      = "cluster-autoscaler"
+  version    = "9.54.0"
+  namespace  = "kube-system"
+
+  values = [
+    yamlencode({
+      cloudProvider = "aws"
+      awsRegion     = var.aws_region
+      autoDiscovery = {
+        clusterName = module.eks.cluster_name
+      }
+      image = {
+        tag = "v1.34.2"
+      }
+      rbac = {
+        serviceAccount = {
+          create = true
+          name   = "cluster-autoscaler"
+          annotations = {
+            "eks.amazonaws.com/role-arn" = aws_iam_role.cluster_autoscaler.arn
+          }
+        }
+      }
+      extraArgs = {
+        "balance-similar-node-groups"   = true
+        "skip-nodes-with-local-storage" = false
+        "expander"                      = "least-waste"
+      }
+      resources = {
+        requests = {
+          cpu    = "50m"
+          memory = "128Mi"
+        }
+        limits = {
+          cpu    = "200m"
+          memory = "300Mi"
+        }
+      }
+    })
+  ]
+
+  depends_on = [module.eks, aws_iam_role_policy_attachment.cluster_autoscaler]
 }
