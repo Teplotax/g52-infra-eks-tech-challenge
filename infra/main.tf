@@ -21,6 +21,9 @@ module "eks" {
 
   endpoint_public_access = true
 
+  # tag no sg primário (criado pelo eks) falha com "empty result" logo após criar o cluster
+  create_primary_security_group_tags = false
+
   enable_cluster_creator_admin_permissions = true
   authentication_mode                      = "API_AND_CONFIG_MAP"
 
