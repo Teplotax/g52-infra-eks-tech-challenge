@@ -33,3 +33,8 @@ variable "destroy" {
   type    = bool
   default = false
 }
+
+variable "rds_clients_security_group_name" {
+  type    = string
+  default = "g52-rds-tech-challenge-clients"
+}

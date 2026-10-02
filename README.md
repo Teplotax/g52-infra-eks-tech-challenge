@@ -8,14 +8,14 @@ Infraestrutura Terraform para provisionamento de um **EKS Cluster (Fargate)** na
 |---|---|
 | `module.eks` (`terraform-aws-modules/eks/aws`) | Cluster EKS com Fargate Profiles para os namespaces `kube-system` e `tech-challenge` |
 | `aws_ecr_repository` (app) | Repositório ECR em `grupo52/tech-challenge/<cluster_name>` com scan automático de imagens |
-| `aws_ecr_repository` (keycloak) | Repositório ECR em `grupo52/tech-challenge/<cluster_name>-keycloak` com scan automático de imagens |
 | `aws_iam_role` + `aws_iam_policy` (lb_controller) | Role IRSA e policy oficial do AWS Load Balancer Controller |
 | `helm_release` (aws-load-balancer-controller) | Controller que provisiona a NLB a partir de manifestos Kubernetes |
 | `helm_release` (metrics-server) | Necessário para o HPA calcular utilização de CPU/memória |
 | `aws_iam_role` + `aws_iam_policy` + `helm_release` (cluster-autoscaler) | Role IRSA e Cluster Autoscaler (v1.34.2), que ajusta o node group entre `min_size` e `max_size` conforme pods pendentes |
 | `aws_ec2_tag` | Tags de descoberta de subnet (`kubernetes.io/cluster/*`, `kubernetes.io/role/elb`) usadas pelo Load Balancer Controller |
-| `aws_iam_role` (ebs_csi) + `aws_eks_addon` (aws-ebs-csi-driver) | Role IRSA e addon gerenciado do EBS CSI Driver, necessário para `PersistentVolumeClaim` (ex: o pod do Postgres em `/k8s`) |
-| `kubernetes_storage_class` (gp3) | StorageClass `gp3` marcada como default do cluster, usada pelo `PersistentVolumeClaim` do Postgres |
+| `aws_iam_role` (ebs_csi) + `aws_eks_addon` (aws-ebs-csi-driver) | Role IRSA e addon gerenciado do EBS CSI Driver, necessário para `PersistentVolumeClaim` |
+| `kubernetes_storage_class` (gp3) | StorageClass `gp3` marcada como default do cluster |
+| `data.aws_security_group` (rds_clients) | SG `g52-rds-tech-challenge-clients`, criado no repositório `g52-infra-rds-tech-challenge` e anexado aos nós para a app alcançar o RDS |
 
 ## Estrutura
 
@@ -65,7 +65,6 @@ infra/
 | `ebs_csi_role_arn` | ARN da IAM role usada pelo EBS CSI Driver |
 | `cluster_autoscaler_role_arn` | ARN da IAM role usada pelo Cluster Autoscaler |
 | `app_repository_url` | URL do repositório ECR da aplicação |
-| `keycloak_repository_url` | URL do repositório ECR do Keycloak |
 
 ## Pipeline CI/CD
 
@@ -83,9 +82,11 @@ feature/** -> develop -> release/vX.X.X -> main
 
 A autenticação com a AWS é feita via **OIDC** (sem chaves estáticas). O role `github-actions-terraform-dev` precisa aceitar tanto o formato clássico quanto o formato imutável do `sub` claim (`repo:Teplotax@<owner_id>/*:*`), já que repositórios criados após 15/07/2026 usam o novo formato por padrão.
 
-## Volumes persistentes (EBS)
+## Banco de dados (RDS)
 
-O Postgres em `/k8s` (repositório `g52-app-tech-challenge`) usa um `PersistentVolumeClaim` na StorageClass `gp3` provisionada aqui. Cada PVC cria um volume EBS real na AWS via EBS CSI Driver — esse volume **não é gerenciado pelo Terraform** (é criado dinamicamente pelo Kubernetes) e por isso **não é removido automaticamente por um `terraform destroy`**. Antes de rodar o pipeline com `destroy = true`, delete o PVC do Postgres (`kubectl delete pvc -n tech-challenge postgres-pvc`) para o CSI driver apagar o volume; caso contrário ele fica órfão na conta AWS gerando custo.
+O Postgres saiu do cluster e agora é um RDS gerenciado (repositório `g52-infra-rds-tech-challenge`). Os nós do node group anexam o SG `g52-rds-tech-challenge-clients`, o único liberado na porta 5432 do banco. Por isso, **o RDS precisa existir antes do `apply` deste repositório**. No destroy a ordem é a inversa: destrua o EKS antes do RDS.
+
+Se ainda existir um PVC do antigo Postgres no cluster (`postgres-pvc`), apague-o antes do `destroy = true` com `kubectl delete pvc -n tech-challenge postgres-pvc`. O volume EBS dele não é gerenciado pelo Terraform e ficaria órfão gerando custo.
 
 ## Migração de ECS para EKS
 
