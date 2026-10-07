@@ -164,8 +164,10 @@ resource "aws_ec2_tag" "cluster_shared" {
   value       = "shared"
 }
 
+# mesma tag nas mesmas subnets pros 3 clusters; só um ambiente gerencia,
+# senão o destroy de um apaga a tag dos outros (a app passa as subnets na annotation do service)
 resource "aws_ec2_tag" "elb_role" {
-  for_each    = toset(var.subnet_ids)
+  for_each    = var.tag_subnets_for_elb ? toset(var.subnet_ids) : toset([])
   resource_id = each.value
   key         = "kubernetes.io/role/elb"
   value       = "1"
