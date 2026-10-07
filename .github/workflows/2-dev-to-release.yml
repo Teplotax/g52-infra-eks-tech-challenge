@@ -1,8 +1,7 @@
 name: "2 - [DEV] Build and Deploy"
 
+# só roda no merge em develop; o PR (aberto pelo workflow 1) não dispara nada
 on:
-  pull_request:
-    branches: [develop]
   push:
     branches: [develop]
   workflow_dispatch:
@@ -12,86 +11,18 @@ permissions:
   contents: write
   pull-requests: write
 
-concurrency:
-  group: terraform-dev
-  cancel-in-progress: false
-
 jobs:
-  Terraform:
-    name: Terraform
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: dev
-
-    defaults:
-      run:
-        working-directory: infra
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Debug OIDC token
-        run: |
-          curl -sLS "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            | jq -r '.value' | cut -d '.' -f2 | base64 -d | jq .
-
-      - name: Configure AWS (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-actions-terraform-dev
-          aws-region: us-east-1
-
-      - name: Extract cluster name from tfvars
-        id: cluster
-        run: |
-          CLUSTER_NAME=$(grep -E '^cluster_name\s*=' inventories/dev/terraform.tfvars | awk -F '=' '{gsub(/[" ]/, "", $2); print $2}')
-          echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_OUTPUT
-
-      - name: Read destroy flag from tfvars
-        id: flags
-        run: |
-          DESTROY=$(grep -E '^destroy\s*=' inventories/dev/terraform.tfvars | awk -F '=' '{gsub(/[[:space:]]/, "", $2); print $2}')
-          echo "DESTROY=$DESTROY" >> $GITHUB_OUTPUT
-
-      - name: Terraform Init
-        run: |
-          terraform init -reconfigure \
-            -backend-config="bucket=g52-terraform-state-dev-${{ vars.AWS_ACCOUNT_ID }}" \
-            -backend-config="key=dev/${{ steps.cluster.outputs.CLUSTER_NAME }}/terraform.tfstate" \
-            -backend-config="region=us-east-1"
-
-      - name: Debug destroy flag
-        run: echo "DESTROY=${{ steps.flags.outputs.DESTROY }}"
-
-      - name: Terraform Validate
-        run: terraform validate
-
-      - name: Terraform Plan
-        if: github.event_name == 'pull_request'
-        run: |
-          terraform plan \
-            -var-file=inventories/dev/terraform.tfvars
-
-      - name: Terraform Destroy
-        if: steps.flags.outputs.DESTROY == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        run: |
-          terraform destroy -auto-approve \
-            -var-file=inventories/dev/terraform.tfvars
-
-      - name: Terraform Apply
-        if: steps.flags.outputs.DESTROY != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        run: |
-          terraform apply -auto-approve \
-            -var-file=inventories/dev/terraform.tfvars
+  deploy:
+    name: Deploy dev
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: dev
+    secrets: inherit
 
   create:
     name: Create PR
-    needs: Terraform
+    needs: deploy
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 

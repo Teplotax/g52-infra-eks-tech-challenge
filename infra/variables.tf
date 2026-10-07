@@ -35,6 +35,10 @@ variable "destroy" {
 }
 
 variable "rds_clients_security_group_name" {
-  type    = string
-  default = "g52-rds-tech-challenge-clients"
+  type = string
+}
+
+variable "tag_subnets_for_elb" {
+  type    = bool
+  default = true
 }
