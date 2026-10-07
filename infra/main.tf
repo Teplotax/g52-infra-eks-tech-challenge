@@ -3,6 +3,12 @@ data "aws_subnet" "selected" {
   id       = each.value
 }
 
+# sg criado no repo do rds, os nós anexam pra app alcançar o banco
+data "aws_security_group" "rds_clients" {
+  name   = var.rds_clients_security_group_name
+  vpc_id = local.vpc_id
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0"
@@ -14,6 +20,9 @@ module "eks" {
   subnet_ids = var.subnet_ids
 
   endpoint_public_access = true
+
+  # tag no sg primário (criado pelo eks) falha com "empty result" logo após criar o cluster
+  create_primary_security_group_tags = false
 
   enable_cluster_creator_admin_permissions = true
   authentication_mode                      = "API_AND_CONFIG_MAP"
@@ -36,8 +45,9 @@ module "eks" {
     default = {
       ami_type       = "AL2023_x86_64_STANDARD"
       instance_types = ["t3.small"]
+      vpc_security_group_ids = [data.aws_security_group.rds_clients.id]
       # t3.small: 2 GiB RAM, ~1.3Gi free per node after kubelet reserve + daemonsets, 11 pods/node.
-      # 2 nodes fit system pods + app/keycloak/postgres/mailpit (incl. the HPA's 2nd app replica).
+      # 2 nodes fit system pods + app/mailpit (incl. the HPA's 2nd app replica).
       min_size     = 2
       max_size     = 3
       desired_size = 2
@@ -147,21 +157,6 @@ resource "aws_ecr_repository" "app" {
   }
 }
 
-resource "aws_ecr_repository" "keycloak" {
-  name = "grupo52/tech-challenge/${var.cluster_name}-keycloak"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  image_tag_mutability = "MUTABLE"
-  force_delete         = true
-
-  lifecycle {
-    prevent_destroy = false
-  }
-}
-
 resource "aws_ec2_tag" "cluster_shared" {
   for_each    = toset(var.subnet_ids)
   resource_id = each.value
@@ -169,8 +164,10 @@ resource "aws_ec2_tag" "cluster_shared" {
   value       = "shared"
 }
 
+# mesma tag nas mesmas subnets pros 3 clusters; só um ambiente gerencia,
+# senão o destroy de um apaga a tag dos outros (a app passa as subnets na annotation do service)
 resource "aws_ec2_tag" "elb_role" {
-  for_each    = toset(var.subnet_ids)
+  for_each    = var.tag_subnets_for_elb ? toset(var.subnet_ids) : toset([])
   resource_id = each.value
   key         = "kubernetes.io/role/elb"
   value       = "1"
