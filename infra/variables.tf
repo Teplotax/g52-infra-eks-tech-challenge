@@ -42,3 +42,10 @@ variable "tag_subnets_for_elb" {
   type    = bool
   default = true
 }
+
+# vazio = sem new relic no cluster (vem do secret NEW_RELIC_LICENSE_KEY do ambiente)
+variable "newrelic_license_key" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
