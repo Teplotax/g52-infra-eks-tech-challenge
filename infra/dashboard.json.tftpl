@@ -1,0 +1,534 @@
+{
+  "name": "G52 Tech Challenge (${env})",
+  "description": "Oficina: OS, APIs, integrações e Kubernetes do ambiente ${env}",
+  "permissions": "PUBLIC_READ_WRITE",
+  "pages": [
+    {
+      "name": "Ordens de serviço",
+      "widgets": [
+        {
+          "title": "Volume diário de OS (novas)",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 4,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.bar"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT count(*) AS 'OS abertas' FROM OrdemStatusAlterado WHERE appName = '${app}' AND status = 'RECEBIDA' FACET dateOf(timestamp) SINCE 7 days ago LIMIT 7"
+              }
+            ]
+          }
+        },
+        {
+          "title": "OS por status (mudanças/dia)",
+          "layout": {
+            "column": 5,
+            "row": 1,
+            "width": 4,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT count(*) FROM OrdemStatusAlterado WHERE appName = '${app}' FACET status TIMESERIES 1 day SINCE 7 days ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Tempo médio por status (min)",
+          "layout": {
+            "column": 9,
+            "row": 1,
+            "width": 4,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.bar"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT average(segundosNoStatusAnterior) / 60 AS 'minutos' FROM OrdemStatusAlterado WHERE appName = '${app}' AND statusAnterior IN ('EM_DIAGNOSTICO', 'EM_EXECUCAO', 'FINALIZADA') FACET statusAnterior SINCE 7 days ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Falhas de integração (e-mail / PDF)",
+          "layout": {
+            "column": 1,
+            "row": 4,
+            "width": 4,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT count(*) FROM IntegracaoFalha WHERE appName = '${app}' FACET integracao, operacao TIMESERIES SINCE 1 day ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Erros da Lambda de autenticação",
+          "layout": {
+            "column": 5,
+            "row": 4,
+            "width": 4,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT sum(provider.errors.Sum) AS 'erros', sum(provider.invocations.Sum) AS 'invocações' FROM ServerlessSample WHERE entityName LIKE '${lambda}%' FACET entityName TIMESERIES SINCE 1 day ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Erros 5xx no API Gateway",
+          "layout": {
+            "column": 9,
+            "row": 4,
+            "width": 4,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT sum(`provider.5XXError.Sum`) AS '5xx', sum(`provider.4XXError.Sum`) AS '4xx' FROM ApiGatewaySample FACET entityName TIMESERIES SINCE 1 day ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Últimas falhas de integração",
+          "layout": {
+            "column": 1,
+            "row": 7,
+            "width": 12,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT timestamp, integracao, operacao, osId, erro, mensagem FROM IntegracaoFalha WHERE appName = '${app}' SINCE 7 days ago LIMIT 20"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "APIs e app",
+      "widgets": [
+        {
+          "title": "Latência da app por rota (ms)",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT count(*) AS 'req', average(duration) * 1000 AS 'média ms', percentile(duration * 1000, 95) AS 'p95 ms' FROM Transaction WHERE appName = '${app}' AND request.uri NOT LIKE '/actuator%' FACET name SINCE 1 hour ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Latência p95 da app (ms)",
+          "layout": {
+            "column": 7,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT percentile(duration * 1000, 95) AS 'p95 ms', average(duration) * 1000 AS 'média ms' FROM Transaction WHERE appName = '${app}' AND request.uri NOT LIKE '/actuator%' TIMESERIES SINCE 3 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Taxa de erro da app (%)",
+          "layout": {
+            "column": 1,
+            "row": 4,
+            "width": 3,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT percentage(count(*), WHERE error IS true) AS 'erro %' FROM Transaction WHERE appName = '${app}' SINCE 1 hour ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Throughput (req/min)",
+          "layout": {
+            "column": 4,
+            "row": 4,
+            "width": 3,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT rate(count(*), 1 minute) AS 'req/min' FROM Transaction WHERE appName = '${app}' AND request.uri NOT LIKE '/actuator%' SINCE 1 hour ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Latência do API Gateway (ms)",
+          "layout": {
+            "column": 7,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT average(provider.latency.Average) AS 'latência', average(provider.integrationLatency.Average) AS 'integração' FROM ApiGatewaySample FACET entityName TIMESERIES SINCE 3 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Healthcheck (/actuator/health)",
+          "layout": {
+            "column": 1,
+            "row": 7,
+            "width": 3,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT percentage(count(*), WHERE http.statusCode = 200) AS 'health OK %' FROM Transaction WHERE appName = '${app}' AND request.uri LIKE '/actuator/health%' SINCE 1 hour ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Logs de erro da app",
+          "layout": {
+            "column": 4,
+            "row": 7,
+            "width": 9,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT timestamp, level, message, correlationId FROM Log WHERE entity.name = '${app}' AND level IN ('ERROR', 'WARN') SINCE 1 hour ago LIMIT 20"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rotas",
+      "widgets": [
+        {
+          "title": "Requisições por rota",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 12,
+            "height": 5
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT count(*) AS 'hits', filter(count(*), WHERE http.statusCode < 400) AS 'sucesso', filter(count(*), WHERE http.statusCode >= 400 AND http.statusCode < 500) AS '4xx', filter(count(*), WHERE http.statusCode >= 500) AS '5xx', percentage(count(*), WHERE http.statusCode >= 500) AS 'erro %' FROM Transaction WHERE appName = '${app}' AND request.uri NOT LIKE '/actuator%' FACET request.method, name SINCE 1 day ago LIMIT 50"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Erros 5xx por rota",
+          "layout": {
+            "column": 1,
+            "row": 6,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT filter(count(*), WHERE http.statusCode >= 500) FROM Transaction WHERE appName = '${app}' AND request.uri NOT LIKE '/actuator%' FACET name TIMESERIES SINCE 1 day ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "4xx por rota (requisições recusadas)",
+          "layout": {
+            "column": 7,
+            "row": 6,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT filter(count(*), WHERE http.statusCode >= 400 AND http.statusCode < 500) FROM Transaction WHERE appName = '${app}' AND request.uri NOT LIKE '/actuator%' FACET name TIMESERIES SINCE 1 day ago"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Kubernetes",
+      "widgets": [
+        {
+          "title": "CPU dos nós (%)",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT average(allocatableCpuCoresUtilization) FROM K8sNodeSample WHERE clusterName = '${cluster}' FACET nodeName TIMESERIES SINCE 3 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Memória dos nós (%)",
+          "layout": {
+            "column": 7,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT average(allocatableMemoryUtilization) FROM K8sNodeSample WHERE clusterName = '${cluster}' FACET nodeName TIMESERIES SINCE 3 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "CPU da app por pod (cores)",
+          "layout": {
+            "column": 1,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT average(cpuUsedCores) FROM K8sContainerSample WHERE clusterName = '${cluster}' AND namespace = 'tech-challenge' AND containerName = 'app' FACET podName TIMESERIES SINCE 3 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Memória da app por pod (MB)",
+          "layout": {
+            "column": 7,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT average(memoryWorkingSetBytes) / 1000000 FROM K8sContainerSample WHERE clusterName = '${cluster}' AND namespace = 'tech-challenge' AND containerName = 'app' FACET podName TIMESERIES SINCE 3 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Réplicas da app (HPA)",
+          "layout": {
+            "column": 1,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT latest(podsAvailable) AS 'disponíveis', latest(podsDesired) AS 'desejados' FROM K8sDeploymentSample WHERE clusterName = '${cluster}' AND deploymentName = 'tech-challenge-ms' TIMESERIES SINCE 3 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Restarts de containers",
+          "layout": {
+            "column": 7,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  ${account_id}
+                ],
+                "query": "SELECT latest(restartCount) AS 'restarts', latest(status) FROM K8sContainerSample WHERE clusterName = '${cluster}' AND namespace = 'tech-challenge' FACET podName, containerName SINCE 1 hour ago"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variables": []
+}
