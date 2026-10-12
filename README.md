@@ -104,6 +104,19 @@ Quando o ambiente do GitHub tem o secret `NEW_RELIC_LICENSE_KEY`, o Terraform in
 
 Para caber no plano gratuito (100 GB/mês), ele roda com `lowDataMode` e sem `logging` e `prometheus`. Os logs da app vão pelo agente Java, já ligados aos traces.
 
+### Dashboard, uptime e alertas (`infra/newrelic.tf`)
+
+Quando o ambiente também tem o secret `NEW_RELIC_API_KEY` (uma **User key**, `NRAK-...`), o Terraform cria no New Relic, por ambiente:
+
+| Recurso | Descrição |
+|---|---|
+| Dashboard `G52 Tech Challenge (<ambiente>)` | Páginas **Ordens de serviço** (volume diário, tempo médio por status, falhas de integração), **APIs e app** (latência, erro, throughput, healthcheck, logs de erro), **Rotas** (hits, sucesso, 4xx, 5xx e taxa de erro por rota) e **Kubernetes**. Template em `infra/dashboard.json.tftpl` |
+| Monitor `g52 health (<ambiente>)` | Ping a cada 5 min no `GET /<ambiente>/health` do API Gateway. Monitores do tipo ping não contam na cota de checks sintéticos |
+| Policy `G52 Tech Challenge (<ambiente>)` | Alertas: falha no processamento de OS (5xx nas rotas de OS), falha de integração (e-mail/PDF), erros na Lambda de autenticação, latência p95 > 2 s, taxa de erro > 5% e app fora do ar (healthcheck) |
+| Notificação por e-mail | Só se `newrelic_alert_email` estiver preenchido no tfvars. Sem e-mail, os alertas abrem *issues* no New Relic |
+
+Esses recursos são criados e destruídos junto com o ambiente. Com o prod desligado, ele não tem alertas nem monitor.
+
 ## Banco de dados (RDS)
 
 O Postgres saiu do cluster e agora é um RDS gerenciado (repositório `g52-infra-rds-tech-challenge`). Os nós do node group anexam o SG `g52-rds-tech-challenge-<ambiente>-clients`, o único liberado na porta 5432 do banco. Por isso, **o RDS precisa existir antes do `apply` deste repositório**. No destroy a ordem é a inversa: destrua o EKS antes do RDS.

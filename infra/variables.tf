@@ -49,3 +49,27 @@ variable "newrelic_license_key" {
   default   = ""
   sensitive = true
 }
+
+variable "newrelic_account_id" {
+  type    = number
+  default = 8613587
+}
+
+# user key (NRAK-...) pra criar dashboard/alertas/monitor; vem do secret NEW_RELIC_API_KEY do ambiente
+variable "newrelic_api_key" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
+# e-mail que recebe os alertas; vazio = só issues no new relic
+variable "newrelic_alert_email" {
+  type    = string
+  default = ""
+}
+
+# rest api compartilhado (g52-infra-gateway), pro monitor de uptime
+variable "api_name" {
+  type    = string
+  default = "api-g52-tech-challenge-v1"
+}
