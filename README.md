@@ -98,6 +98,12 @@ A branch `main` é protegida: não aceita push direto, e o merge só acontece po
 
 Os três clusters usam as mesmas subnets. A tag `kubernetes.io/role/elb` é a mesma para todos, então só o dev a gerencia (`tag_subnets_for_elb`). Senão, o destroy de um ambiente apagaria a tag dos outros. Por isso, os Services da app informam as subnets das NLBs pela annotation `aws-load-balancer-subnets` e não dependem da tag.
 
+## Observabilidade (New Relic)
+
+Quando o ambiente do GitHub tem o secret `NEW_RELIC_LICENSE_KEY`, o Terraform instala o Helm chart `nri-bundle` no namespace `newrelic`. Ele coleta CPU, memória, pods, nós, eventos e o estado dos objetos do cluster (kube-state-metrics). Sem o secret, nada é instalado.
+
+Para caber no plano gratuito (100 GB/mês), ele roda com `lowDataMode` e sem `logging` e `prometheus`. Os logs da app vão pelo agente Java, já ligados aos traces.
+
 ## Banco de dados (RDS)
 
 O Postgres saiu do cluster e agora é um RDS gerenciado (repositório `g52-infra-rds-tech-challenge`). Os nós do node group anexam o SG `g52-rds-tech-challenge-<ambiente>-clients`, o único liberado na porta 5432 do banco. Por isso, **o RDS precisa existir antes do `apply` deste repositório**. No destroy a ordem é a inversa: destrua o EKS antes do RDS.

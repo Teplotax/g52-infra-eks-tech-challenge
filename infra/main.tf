@@ -373,3 +373,41 @@ resource "helm_release" "cluster_autoscaler" {
 
   depends_on = [module.eks, aws_iam_role_policy_attachment.cluster_autoscaler]
 }
+
+# new relic: cpu/memória/pods/eventos do cluster. low data mode e sem logs/prometheus
+# pra caber no free tier (os logs da app vão pelo agente java, com o trace junto)
+resource "helm_release" "newrelic" {
+  count      = var.newrelic_license_key != "" ? 1 : 0
+  name       = "newrelic-bundle"
+  repository = "https://helm-charts.newrelic.com"
+  chart      = "nri-bundle"
+  namespace  = "newrelic"
+
+  create_namespace = true
+
+  values = [
+    yamlencode({
+      global = {
+        cluster     = var.cluster_name
+        lowDataMode = true
+      }
+      "newrelic-infrastructure" = {
+        privileged = true
+      }
+      infrastructure = { enabled = true }
+      kubeEvents     = { enabled = true }
+      ksm            = { enabled = true }
+      webhook        = { enabled = true }
+      logging        = { enabled = false }
+      prometheus     = { enabled = false }
+    })
+  ]
+
+  set_sensitive {
+    name  = "global.licenseKey"
+    value = var.newrelic_license_key
+  }
+
+  # o webhook do lb controller intercepta todo service criado; sem ele de pé o install falha
+  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
+}
