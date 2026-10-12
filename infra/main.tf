@@ -408,5 +408,6 @@ resource "helm_release" "newrelic" {
     value = var.newrelic_license_key
   }
 
-  depends_on = [module.eks]
+  # o webhook do lb controller intercepta todo service criado; sem ele de pé o install falha
+  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
 }
