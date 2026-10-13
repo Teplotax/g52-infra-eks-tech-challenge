@@ -5,6 +5,6 @@ aws_region                = "us-east-1"
 app_namespace             = "tech-challenge"
 subnet_ids                = ["subnet-0f8545b2a7f5196a2", "subnet-0f211081d9ccab538"]
 console_user_arn          = ["arn:aws:iam::679084116705:user/Teplotaxl", "arn:aws:iam::679084116705:user/Teacher"]
-destroy                   = false
+destroy                   = true
 rds_clients_security_group_name = "g52-rds-tech-challenge-hom-clients"
 tag_subnets_for_elb             = false
