@@ -182,7 +182,7 @@
                 "accountIds": [
                   ${account_id}
                 ],
-                "query": "SELECT count(*) AS 'req', average(duration) * 1000 AS 'média ms', percentile(duration * 1000, 95) AS 'p95 ms' FROM Transaction WHERE appName = '${app}' AND request.uri NOT LIKE '/actuator%' FACET name SINCE 1 hour ago"
+                "query": "SELECT count(*) AS 'req', average(duration) * 1000 AS 'média ms', percentile(duration * 1000, 95) AS 'p95 ms' FROM Transaction WHERE appName = '${app}' AND name LIKE 'WebTransaction/SpringController/%' AND request.uri NOT LIKE '/actuator%' FACET aparse(name, 'WebTransaction/SpringController/*') AS 'rota' SINCE 1 hour ago"
               }
             ]
           }
@@ -341,7 +341,7 @@
                 "accountIds": [
                   ${account_id}
                 ],
-                "query": "SELECT count(*) AS 'hits', filter(count(*), WHERE http.statusCode < 400) AS 'sucesso', filter(count(*), WHERE http.statusCode >= 400 AND http.statusCode < 500) AS '4xx', filter(count(*), WHERE http.statusCode >= 500) AS '5xx', percentage(count(*), WHERE http.statusCode >= 500) AS 'erro %' FROM Transaction WHERE appName = '${app}' AND request.uri NOT LIKE '/actuator%' FACET request.method, name SINCE 1 day ago LIMIT 50"
+                "query": "SELECT count(*) AS 'hits', filter(count(*), WHERE http.statusCode < 400) AS 'sucesso', filter(count(*), WHERE http.statusCode >= 400 AND http.statusCode < 500) AS '4xx', filter(count(*), WHERE http.statusCode >= 500) AS '5xx', percentage(count(*), WHERE http.statusCode >= 500) AS 'erro %' FROM Transaction WHERE appName = '${app}' AND name LIKE 'WebTransaction/SpringController/%' AND request.uri NOT LIKE '/actuator%' FACET aparse(name, 'WebTransaction/SpringController/*') AS 'rota' SINCE 1 day ago LIMIT 50"
               }
             ]
           }
@@ -363,7 +363,7 @@
                 "accountIds": [
                   ${account_id}
                 ],
-                "query": "SELECT filter(count(*), WHERE http.statusCode >= 500) FROM Transaction WHERE appName = '${app}' AND request.uri NOT LIKE '/actuator%' FACET name TIMESERIES SINCE 1 day ago"
+                "query": "SELECT filter(count(*), WHERE http.statusCode >= 500) FROM Transaction WHERE appName = '${app}' AND name LIKE 'WebTransaction/SpringController/%' AND request.uri NOT LIKE '/actuator%' FACET aparse(name, 'WebTransaction/SpringController/*') AS 'rota' TIMESERIES SINCE 1 day ago"
               }
             ]
           }
@@ -385,7 +385,7 @@
                 "accountIds": [
                   ${account_id}
                 ],
-                "query": "SELECT filter(count(*), WHERE http.statusCode >= 400 AND http.statusCode < 500) FROM Transaction WHERE appName = '${app}' AND request.uri NOT LIKE '/actuator%' FACET name TIMESERIES SINCE 1 day ago"
+                "query": "SELECT filter(count(*), WHERE http.statusCode >= 400 AND http.statusCode < 500) FROM Transaction WHERE appName = '${app}' AND name LIKE 'WebTransaction/SpringController/%' AND request.uri NOT LIKE '/actuator%' FACET aparse(name, 'WebTransaction/SpringController/*') AS 'rota' TIMESERIES SINCE 1 day ago"
               }
             ]
           }
