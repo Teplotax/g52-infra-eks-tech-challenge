@@ -28,6 +28,7 @@ jobs:
     env:
       TFVARS: inventories/${{ inputs.environment }}/terraform.tfvars
       TF_VAR_newrelic_license_key: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+      TF_VAR_newrelic_api_key: ${{ secrets.NEW_RELIC_API_KEY }}
 
     defaults:
       run:

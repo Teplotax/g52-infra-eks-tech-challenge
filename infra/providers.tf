@@ -14,6 +14,10 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 2.14"
     }
+    newrelic = {
+      source  = "newrelic/newrelic"
+      version = "~> 3.0"
+    }
   }
 
   backend "s3" {}
@@ -39,4 +43,11 @@ provider "helm" {
     cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
     token                  = data.aws_eks_cluster_auth.this.token
   }
+}
+
+# sem api key o provider fica com um valor qualquer; nenhum recurso newrelic é criado (newrelic.tf)
+provider "newrelic" {
+  account_id = var.newrelic_account_id
+  api_key    = var.newrelic_api_key != "" ? var.newrelic_api_key : "NRAK-NAO-CONFIGURADA"
+  region     = "US"
 }
