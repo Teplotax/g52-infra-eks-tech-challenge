@@ -58,6 +58,12 @@ jobs:
           echo "DESTROY=$DESTROY" >> $GITHUB_OUTPUT
           echo "ENV=${{ inputs.environment }} NAME=$NAME DESTROY=$DESTROY"
 
+      # só mostra se os secrets chegaram (true/false), nunca o valor
+      - name: New Relic secrets
+        run: |
+          echo "NEW_RELIC_LICENSE_KEY configurada: ${{ secrets.NEW_RELIC_LICENSE_KEY != '' }} (nri-bundle no cluster)"
+          echo "NEW_RELIC_API_KEY configurada: ${{ secrets.NEW_RELIC_API_KEY != '' }} (dashboard, alertas e monitor)"
+
       - name: Terraform Init
         run: |
           terraform init -reconfigure \
