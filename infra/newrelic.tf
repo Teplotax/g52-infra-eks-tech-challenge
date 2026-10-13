@@ -2,7 +2,8 @@
 # só cria se o ambiente tiver o secret NEW_RELIC_API_KEY (user key, NRAK-...)
 
 locals {
-  newrelic_enabled = var.newrelic_api_key != ""
+  # só o "tem chave?" sai do valor sensível, dá pra usar em count/for_each
+  newrelic_enabled = nonsensitive(var.newrelic_api_key != "")
 
   nr_app     = "tech-challenge-ms-${var.environment}"
   nr_lambda  = "g52-lambda-auth-${var.environment}"
@@ -98,7 +99,7 @@ locals {
 }
 
 resource "newrelic_nrql_alert_condition" "this" {
-  for_each = local.newrelic_enabled ? local.nr_conditions : {}
+  for_each = { for nome, cond in local.nr_conditions : nome => cond if local.newrelic_enabled }
 
   policy_id                    = newrelic_alert_policy.this[0].id
   type                         = "static"
